@@ -1,6 +1,6 @@
 .player {
   font-family: "JetBrains Mono Medium", "Material Design Icons Desktop";
-  background-color: transparent;
+  background-color: $bg;
   padding: 0.6rem;
   min-height: 12rem;
   border-radius: 0.6rem;
@@ -15,11 +15,9 @@
 
     .player-info {
       border-radius: 1rem;
-      background: linear-gradient(
-        to right,
-        rgb(#191919, 1),
-        rgba(#262626, 0.5)
-      );
+      background: linear-gradient(to right,
+          rgb(#191919, 1),
+          rgba(#262626, 0.5));
       padding: 0.65rem;
 
       .player-shuffle,
@@ -67,13 +65,12 @@
 
       .player-bar scale trough highlight {
         all: unset;
-        background-image: linear-gradient(
-          to right,
-          darken($color: $green, $amount: 15%),
-          $green
-        );
+        background-image: linear-gradient(to right,
+            darken($color: $green, $amount: 15%),
+            $green );
         border-radius: 2rem;
       }
+
       .player-bar scale trough {
         all: unset;
         background-color: rgba($fg, 0.3);
@@ -91,16 +88,16 @@
     }
   }
 
-  .min {
-    font-family: "JetBrainsMono Nerd Font";
-    font-size: 1.1rem;
-    padding: 0 0.9rem;
-    color: $red;
-  }
+.min {
+  font-family: "JetBrainsMono Nerd Font";
+  font-size: 1.1rem;
+  padding: 0 0.9rem;
+  color: $red;
+}
 
-  .min:hover {
-    color: $magenta;
-  }
+.min:hover {
+  color: $magenta;
+}
 
   .player-controls {
     padding: 0rem 0.7rem 0rem 1rem;

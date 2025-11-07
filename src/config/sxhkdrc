@@ -128,7 +128,7 @@ super + alt + r
 	bspc wm -r
 
 # Close/Kill node
-super + {_,shift + }c
+super + {_,shift + } c
 	bspc node -{c,k}
 
 # Reload sxhkd Keybinds

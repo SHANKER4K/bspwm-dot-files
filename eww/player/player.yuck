@@ -70,15 +70,11 @@
 						)
 					)
 					(box
-						(eventbox
-				:cursor "pointer"
-				(button
-					:class "min"
-					:halign "end"
-					:onclick "eww -c ~/.config/bspwm/eww open --toggle music"
-					"󰅙"
-				)
-			)
+						(button
+							:class {music-player != "spotify" ? "mpd-icon" : "spotify-icon"}
+							:halign "end"
+							{music-player != "spotify" ? "󰎆" : "󰓇"}
+						)
 					)
 				)
 				(label
@@ -130,44 +126,46 @@
 						)
 					)
 				)
-				
-				(box
-					:class "player-controls"
-					:orientation "h"
-					:valign "center"
-					:halign "center"
-					:hexpand true
-					:space-evenly false
-					:spacing 50
-					(eventbox
-						:cursor "pointer"
-						(button
-							:class "player-previous"
-							:onclick "MediaControl --previous"
-							"󰒮"
-						)
-					)
-					(eventbox
-						:cursor "pointer"
-						(button
-							:class "player-toggle"
-							:onclick "MediaControl --toggle"
-							{music-status == "Playing" ? "󰏤" : music-status == "Paused" ? "󰐊" : "󰓛"}
-						)
-					)
-					(eventbox
-						:cursor "pointer"
-						(button
-							:class "player-next"
-							:onclick "MediaControl --next"
-							"󰒭"
-						)
-					)
-					
-					
+			)
+		)
+		(box
+			:class "player-controls"
+			:orientation "v"
+			:valign "center"
+			:hexpand true
+			:space-evenly false
+			:spacing 20
+			(eventbox
+				:cursor "pointer"
+				(button
+					:class "player-previous"
+					:onclick "MediaControl --previous"
+					"󰒮"
 				)
-				
-		
+			)
+			(eventbox
+				:cursor "pointer"
+				(button
+					:class "player-toggle"
+					:onclick "MediaControl --toggle"
+					{music-status == "Playing" ? "󰏤" : music-status == "Paused" ? "󰐊" : "󰓛"}
+				)
+			)
+			(eventbox
+				:cursor "pointer"
+				(button
+					:class "player-next"
+					:onclick "MediaControl --next"
+					"󰒭"
+				)
+			)
+      (eventbox
+				:cursor "pointer"
+				(button
+					:class "min"
+					:onclick "eww -c ~/.config/bspwm/eww open --toggle music"
+					"󰅙"
+				)
 			)
 		)
 	)

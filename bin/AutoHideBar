@@ -1,0 +1,63 @@
+#!/bin/sh
+# AutoHideBar - show/hide bar when pointer near screen edge
+# Uses existing HideBar script: -h to hide, -u to unhide
+# Lightweight polling (xdotool required)
+
+HIDE_BIN="$HOME/.config/bspwm/bin/HideBar"
+THRESHOLD=${AUTOBAR_THRESHOLD:-8}       # pixels from top to trigger show
+BAR_HEIGHT=${AUTOBAR_BAR_HEIGHT:-15}    # estimated bar height in pixels (used to detect hover)
+POLL=${AUTOBAR_POLL:-0.30}              # seconds between polls
+START_VISIBLE=${AUTOBAR_START_VISIBLE:-1} # 1 = show at start, 0 = hide at start
+
+# Ensure dependencies
+command -v xdotool >/dev/null 2>&1 || { echo "xdotool not found, AutoHideBar exiting"; exit 0; }
+
+# Helper: show/hide
+show_bar() {
+  "$HIDE_BIN" -u >/dev/null 2>&1 || true
+}
+hide_bar() {
+  "$HIDE_BIN" -h >/dev/null 2>&1 || true
+}
+
+# Ensure proper state on exit
+cleanup() {
+  show_bar
+  exit 0
+}
+trap cleanup INT TERM EXIT
+
+# Initial state
+if [ "$START_VISIBLE" -eq 1 ]; then
+  show_bar
+  VISIBLE=1
+else
+  hide_bar
+  VISIBLE=0
+fi
+
+# Main loop: show when pointer near top edge, hide otherwise
+while :; do
+  # get pointer location
+  eval $(xdotool getmouselocation --shell 2>/dev/null) || { sleep $POLL; continue; }
+
+  if [ "$Y" -le "$THRESHOLD" ]; then
+    if [ "$VISIBLE" -eq 0 ]; then
+      show_bar
+      VISIBLE=1
+    fi
+  else
+    if [ "$VISIBLE" -eq 1 ]; then
+      # small debounce to avoid flicker when moving pointer
+      sleep 0.08
+      eval $(xdotool getmouselocation --shell 2>/dev/null) || { sleep $POLL; continue; }
+      # keep visible while cursor hovers the bar area (threshold + estimated bar height)
+      if [ "$Y" -gt $((THRESHOLD + BAR_HEIGHT)) ]; then
+        hide_bar
+        VISIBLE=0
+      fi
+    fi
+  fi
+
+  sleep $POLL
+done
