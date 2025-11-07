@@ -261,10 +261,3 @@ super + n ; m
 # Example usage: super + n followed by 5 (brings everything from desktop 5)
 super + n ; {1-9}
     bspc query -N -d {1-9} -n '.window' | xargs -I id -n 1 bspc node id -d focused
-
-# BEGIN KEYBINDS (managed by KeybindEditor)
-
-super + k
-    ~/.config/bspwm/bin/KeybindEditor
-
-# END KEYBINDS (managed by KeybindEditor)

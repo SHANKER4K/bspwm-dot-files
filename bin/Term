@@ -98,14 +98,14 @@ case $MY_TERM in
 	;;
     "kitty")
 	case $1 in
-	    "--terminal") kitty ;;
-	    "--floating") kitty --class=FloaTerm ;;
-	    "--update") kitty --hold --class=FloaTerm -e paru -Syu --nocombinedupgrade ;;
-	    "--checkupdates") kitty --hold --class=Updating -e Updates --print-updates ;;
-	    "--yazi") kitty --hold --name=YaziTerm --class=FloaTerm -e yazi ;;
-	    "--nvim") kitty -e nvim ;;
-	    "--music") kitty --name=MusicTerm --class=FloaTerm -e ncmpcpp ;;
-	    "--fetch") kitty --name=FetchTerm --class=FloaTerm -e ~/.local/bin/sysfetch ;;
+	    "--terminal") kitty fish ;;
+	    "--floating") kitty fish --class=FloaTerm ;;
+	    "--update") kitty fish --hold --class=FloaTerm -e paru -Syu --nocombinedupgrade ;;
+	    "--checkupdates") kitty fish --hold --class=Updating -e Updates --print-updates ;;
+	    "--yazi") kitty fish --hold --name=YaziTerm --class=FloaTerm -e yazi ;;
+	    "--nvim") kitty fish -e nvim ;;
+	    "--music") kitty fish --name=MusicTerm --class=FloaTerm -e ncmpcpp ;;
+	    "--fetch") kitty fish --name=FetchTerm --class=FloaTerm -e ~/.local/bin/sysfetch ;;
 	esac
 	;;
 esac

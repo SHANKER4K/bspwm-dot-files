@@ -1,0 +1,360 @@
+#!/usr/bin/env python3
+"""
+KeybindEditor - simple Tkinter GUI to add/remove managed keybindings in sxhkdrc
+Usage: run this script from your session (it's also safe to run from terminal).
+
+Behavior:
+ - Keeps a managed section at the end of `~/.config/bspwm/config/sxhkdrc` between markers:
+   # BEGIN KEYBINDS (managed by KeybindEditor)
+   ...bindings...
+   # END KEYBINDS (managed by KeybindEditor)
+ - On Save: backups the original file to ~/.config/bspwm/config/sxhkdrc.bak.TIMESTAMP
+ - Adds/Edits/Removes only bindings inside the managed section; leaves rest of file unchanged.
+
+No external Python deps (uses tkinter, which is standard but may require system package).
+
+Author: generated for user
+"""
+
+import os
+import time
+import tkinter as tk
+from tkinter import messagebox, simpledialog, filedialog
+
+CONFIG = os.path.expanduser("~/.config/bspwm/config/sxhkdrc")
+MARKER_START = "# BEGIN KEYBINDS (managed by KeybindEditor)"
+MARKER_END = "# END KEYBINDS (managed by KeybindEditor)"
+
+class KeybindEditorApp:
+    def __init__(self, master):
+        self.master = master
+        master.title("Keybind Editor")
+        master.geometry("700x420")
+
+        # top frame
+        top = tk.Frame(master)
+        top.pack(fill=tk.X, padx=8, pady=6)
+
+        self.reload_btn = tk.Button(top, text="Reload", command=self.load)
+        self.reload_btn.pack(side=tk.LEFT)
+
+        self.save_btn = tk.Button(top, text="Save", command=self.save)
+        self.save_btn.pack(side=tk.LEFT, padx=(6,0))
+
+        self.open_btn = tk.Button(top, text="Open sxhkdrc", command=self.open_in_editor)
+        self.open_btn.pack(side=tk.LEFT, padx=(6,0))
+
+        self.status = tk.Label(top, text="", anchor=tk.W)
+        self.status.pack(side=tk.RIGHT)
+
+        # two listboxes: left = all bindings in file, right = managed bindings
+        frame = tk.Frame(master)
+        frame.pack(fill=tk.BOTH, expand=True, padx=8)
+
+        left_frame = tk.Frame(frame)
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tk.Label(left_frame, text='All bindings (sxhkdrc)').pack(anchor=tk.W)
+        self.all_listbox = tk.Listbox(left_frame, font=("monospace", 10))
+        self.all_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        left_scroll = tk.Scrollbar(left_frame, orient=tk.VERTICAL)
+        left_scroll.config(command=self.all_listbox.yview)
+        left_scroll.pack(side=tk.LEFT, fill=tk.Y)
+        self.all_listbox.config(yscrollcommand=left_scroll.set)
+
+        mid_frame = tk.Frame(frame)
+        mid_frame.pack(side=tk.LEFT, fill=tk.Y, padx=6)
+        self.import_btn = tk.Button(mid_frame, text='Import →', command=self.import_binding)
+        self.import_btn.pack(pady=6)
+        self.remove_file_btn = tk.Button(mid_frame, text='Remove from file', command=self.remove_from_file)
+        self.remove_file_btn.pack(pady=6)
+        self.edit_file_btn = tk.Button(mid_frame, text='Edit in editor', command=self.edit_in_file)
+        self.edit_file_btn.pack(pady=6)
+
+        right_frame = tk.Frame(frame)
+        right_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tk.Label(right_frame, text='Managed bindings (editable)').pack(anchor=tk.W)
+        self.listbox = tk.Listbox(right_frame, font=("monospace", 10))
+        self.listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        right_scroll = tk.Scrollbar(right_frame, orient=tk.VERTICAL)
+        right_scroll.config(command=self.listbox.yview)
+        right_scroll.pack(side=tk.LEFT, fill=tk.Y)
+        self.listbox.config(yscrollcommand=right_scroll.set)
+
+        # right side buttons
+        btns = tk.Frame(master)
+        btns.pack(fill=tk.X, padx=8, pady=8)
+
+        self.add_btn = tk.Button(btns, text="Add", command=self.add)
+        self.add_btn.pack(side=tk.LEFT)
+
+        self.edit_btn = tk.Button(btns, text="Edit", command=self.edit)
+        self.edit_btn.pack(side=tk.LEFT, padx=(6,0))
+
+        self.remove_btn = tk.Button(btns, text="Remove", command=self.remove)
+        self.remove_btn.pack(side=tk.LEFT, padx=(6,0))
+
+        self.preview_btn = tk.Button(btns, text="Preview generated block", command=self.preview)
+        self.preview_btn.pack(side=tk.RIGHT)
+
+        # internal state
+        self.orig_text = ""
+        self.managed = []  # list of (keys, cmd)
+        self.all_bindings = []  # list of (keys, cmd, start_line, end_line)
+
+        self.load()
+
+    def set_status(self, text):
+        self.status.config(text=text)
+
+    def load(self):
+        try:
+            with open(CONFIG, 'r', encoding='utf-8') as f:
+                self.orig_text = f.read()
+        except FileNotFoundError:
+            # create empty file
+            self.orig_text = ""
+            with open(CONFIG, 'w', encoding='utf-8') as f:
+                f.write("")
+
+        # parse managed and all bindings
+        self.managed = self.parse_managed(self.orig_text)
+        self.all_bindings = self.parse_all_bindings(self.orig_text)
+        self.refresh_listbox()
+        self.set_status('Loaded')
+
+    def parse_managed(self, text):
+        # find markers
+        if MARKER_START in text and MARKER_END in text:
+            start = text.index(MARKER_START) + len(MARKER_START)
+            end = text.index(MARKER_END)
+            block = text[start:end].strip('\n')
+        else:
+            block = ''
+        entries = []
+        if not block.strip():
+            return entries
+        # block may contain pairs: key line then command line (indented)
+        lines = block.splitlines()
+        i = 0
+        while i < len(lines):
+            line = lines[i].rstrip()
+            if not line.strip():
+                i += 1
+                continue
+            # keys line
+            keys_line = line.strip()
+            cmd_lines = []
+            j = i + 1
+            # collect following indented lines as command
+            while j < len(lines) and (lines[j].startswith(' ') or lines[j].startswith('\t')):
+                cmd_lines.append(lines[j].lstrip())
+                j += 1
+            cmd = " ".join(cmd_lines).strip()
+            entries.append((keys_line, cmd))
+            i = j
+        return entries
+
+    def parse_all_bindings(self, text):
+        """Parse the entire sxhkdrc and return list of (keys_line, cmd, start_idx, end_idx).
+        start_idx/end_idx are line indices (0-based) in the text.splitlines().
+        """
+        lines = text.splitlines()
+        entries = []
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if not line.strip():
+                i += 1
+                continue
+            # a binding starts with a non-indented line that is not a comment
+            if not line.startswith(' ') and not line.startswith('\t') and not line.strip().startswith('#'):
+                keys_line = line.rstrip()
+                cmd_lines = []
+                j = i + 1
+                while j < len(lines) and (lines[j].startswith(' ') or lines[j].startswith('\t')):
+                    cmd_lines.append(lines[j].lstrip())
+                    j += 1
+                cmd = " ".join(cmd_lines).strip()
+                entries.append((keys_line, cmd, i, j-1))
+                i = j
+            else:
+                i += 1
+        return entries
+
+    def refresh_listbox(self):
+        self.listbox.delete(0, tk.END)
+        for keys, cmd in self.managed:
+            display = f"{keys}  ->  {cmd}"
+            self.listbox.insert(tk.END, display)
+        # refresh all bindings list
+        self.all_listbox.delete(0, tk.END)
+        for keys, cmd, s, e in self.all_bindings:
+            display = f"{keys}  ->  {cmd}"
+            self.all_listbox.insert(tk.END, display)
+
+    def add(self):
+        keys = simpledialog.askstring("Keys", "Enter keys (e.g. super + c):", parent=self.master)
+        if not keys:
+            return
+        cmd = simpledialog.askstring("Command", "Enter command to run (single line):", parent=self.master)
+        if cmd is None:
+            return
+        self.managed.append((keys.strip(), cmd.strip()))
+        self.refresh_listbox()
+        self.set_status('Added')
+
+    def edit(self):
+        sel = self.listbox.curselection()
+        if not sel:
+            messagebox.showinfo('Edit', 'Select a binding to edit')
+            return
+        idx = sel[0]
+        keys, cmd = self.managed[idx]
+        new_keys = simpledialog.askstring('Keys', 'Edit keys:', initialvalue=keys, parent=self.master)
+        if new_keys is None:
+            return
+        new_cmd = simpledialog.askstring('Command', 'Edit command:', initialvalue=cmd, parent=self.master)
+        if new_cmd is None:
+            return
+        self.managed[idx] = (new_keys.strip(), new_cmd.strip())
+        self.refresh_listbox()
+        self.set_status('Edited')
+
+    def import_binding(self):
+        sel = self.all_listbox.curselection()
+        if not sel:
+            messagebox.showinfo('Import', 'Select a binding from "All bindings" to import')
+            return
+        idx = sel[0]
+        keys, cmd, s, e = self.all_bindings[idx]
+        # add to managed if not duplicate
+        if any(k == keys and c == cmd for k, c in self.managed):
+            messagebox.showinfo('Import', 'Binding already present in managed list')
+            return
+        self.managed.append((keys, cmd))
+        self.refresh_listbox()
+        self.set_status('Imported')
+
+    def remove_from_file(self):
+        sel = self.all_listbox.curselection()
+        if not sel:
+            messagebox.showinfo('Remove', 'Select a binding from "All bindings" to remove')
+            return
+        idx = sel[0]
+        keys, cmd, s, e = self.all_bindings[idx]
+        if not messagebox.askyesno('Confirm', f'Remove binding:\n{keys} -> {cmd}\n\nThis will backup the file and remove these lines from {CONFIG}. Continue?'):
+            return
+        # backup and write
+        bak = CONFIG + '.bak.' + time.strftime('%Y%m%d%H%M%S')
+        try:
+            with open(CONFIG, 'r', encoding='utf-8') as f:
+                orig = f.read()
+            with open(bak, 'w', encoding='utf-8') as f:
+                f.write(orig)
+        except Exception as e:
+            messagebox.showerror('Error', f'Failed to backup: {e}')
+            return
+        # remove the lines from orig
+        lines = orig.splitlines()
+        new_lines = lines[:s] + lines[e+1:]
+        try:
+            with open(CONFIG, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(new_lines) + '\n')
+        except Exception as e:
+            messagebox.showerror('Error', f'Failed to write: {e}')
+            return
+        self.set_status(f'Removed (backup: {os.path.basename(bak)})')
+        messagebox.showinfo('Removed', f'Binding removed. Backup: {bak}')
+        # reload state
+        self.load()
+
+    def edit_in_file(self):
+        sel = self.all_listbox.curselection()
+        if not sel:
+            messagebox.showinfo('Edit', 'Select a binding from "All bindings" to open in editor')
+            return
+        # open entire file in editor for manual edit
+        self.open_in_editor()
+
+    def remove(self):
+        sel = self.listbox.curselection()
+        if not sel:
+            messagebox.showinfo('Remove', 'Select a binding to remove')
+            return
+        idx = sel[0]
+        if not messagebox.askyesno('Confirm', 'Remove selected binding?'):
+            return
+        self.managed.pop(idx)
+        self.refresh_listbox()
+        self.set_status('Removed')
+
+    def preview(self):
+        block = self.generate_block()
+        dlg = tk.Toplevel(self.master)
+        dlg.title('Preview managed block')
+        txt = tk.Text(dlg, wrap='none', width=100, height=20)
+        txt.pack(fill=tk.BOTH, expand=True)
+        txt.insert('1.0', block)
+        txt.config(state=tk.DISABLED)
+
+    def generate_block(self):
+        lines = [MARKER_START, '']
+        for keys, cmd in self.managed:
+            lines.append(keys)
+            # indent command for readability
+            lines.append('    ' + cmd)
+            lines.append('')
+        lines.append(MARKER_END)
+        lines.append('')
+        return '\n'.join(lines)
+
+    def save(self):
+        # backup
+        bak = CONFIG + '.bak.' + time.strftime('%Y%m%d%H%M%S')
+        try:
+            if os.path.exists(CONFIG):
+                with open(CONFIG, 'r', encoding='utf-8') as f:
+                    orig = f.read()
+                with open(bak, 'w', encoding='utf-8') as f:
+                    f.write(orig)
+            else:
+                orig = ''
+        except Exception as e:
+            messagebox.showerror('Error', f'Failed to backup: {e}')
+            return
+
+        # strip existing managed block from orig
+        if MARKER_START in orig and MARKER_END in orig:
+            before = orig.split(MARKER_START, 1)[0]
+            after = orig.split(MARKER_END, 1)[1]
+            newtext = before.rstrip('\n') + '\n\n' + self.generate_block() + after
+        else:
+            # append
+            newtext = orig.rstrip('\n') + '\n\n' + self.generate_block()
+
+        try:
+            with open(CONFIG, 'w', encoding='utf-8') as f:
+                f.write(newtext)
+        except Exception as e:
+            messagebox.showerror('Error', f'Failed to write: {e}')
+            return
+
+        self.set_status(f'Saved (backup: {os.path.basename(bak)})')
+        messagebox.showinfo('Saved', f'Bindings saved to {CONFIG}\nBackup: {bak}')
+
+    def open_in_editor(self):
+        editor = os.environ.get('EDITOR') or os.environ.get('VISUAL') or 'nano'
+        try:
+            # launch editor in a terminal if necessary
+            os.execvp(editor, [editor, CONFIG])
+        except Exception as e:
+            messagebox.showerror('Error', f'Failed to open editor: {e}')
+
+
+def main():
+    root = tk.Tk()
+    app = KeybindEditorApp(root)
+    root.mainloop()
+
+if __name__ == '__main__':
+    main()
